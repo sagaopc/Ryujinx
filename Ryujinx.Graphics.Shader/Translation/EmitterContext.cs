@@ -2,6 +2,7 @@ using Ryujinx.Graphics.Shader.Decoders;
 using Ryujinx.Graphics.Shader.IntermediateRepresentation;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 
 using static Ryujinx.Graphics.Shader.IntermediateRepresentation.OperandHelper;
@@ -30,6 +31,19 @@ namespace Ryujinx.Graphics.Shader.Translation
             IsNonMain = isNonMain;
             _operations = new List<Operation>();
             _labels = new Dictionary<ulong, Operand>();
+
+            EmitStart();
+        }
+
+        private void EmitStart()
+        {
+            if (Config.Stage == ShaderStage.Vertex &&
+                Config.Options.TargetApi == TargetApi.Vulkan &&
+                (Config.Options.Flags & TranslationFlags.VertexA) == 0)
+            {
+                // Vulkan requires the point size to be always written on the shader if the primitive topology is points.
+                this.Copy(Attribute(AttributeConsts.PointSize), ConstF(Config.GpuAccessor.QueryPointSize()));
+            }
         }
 
         public T GetOp<T>() where T : unmanaged
@@ -43,7 +57,7 @@ namespace Ryujinx.Graphics.Shader.Translation
         {
             Operation operation = new Operation(inst, dest, sources);
 
-            Add(operation);
+            _operations.Add(operation);
 
             return dest;
         }
@@ -154,10 +168,115 @@ namespace Ryujinx.Graphics.Shader.Translation
             return label;
         }
 
+        public void PrepareForVertexReturn()
+        {
+            if (Config.GpuAccessor.QueryViewportTransformDisable())
+            {
+                Operand x = Attribute(AttributeConsts.PositionX | AttributeConsts.LoadOutputMask);
+                Operand y = Attribute(AttributeConsts.PositionY | AttributeConsts.LoadOutputMask);
+                Operand xScale = Attribute(AttributeConsts.SupportBlockViewInverseX);
+                Operand yScale = Attribute(AttributeConsts.SupportBlockViewInverseY);
+                Operand negativeOne = ConstF(-1.0f);
+
+                this.Copy(Attribute(AttributeConsts.PositionX), this.FPFusedMultiplyAdd(x, xScale, negativeOne));
+                this.Copy(Attribute(AttributeConsts.PositionY), this.FPFusedMultiplyAdd(y, yScale, negativeOne));
+            }
+
+            if (Config.Options.TargetApi == TargetApi.Vulkan && Config.GpuAccessor.QueryTransformDepthMinusOneToOne())
+            {
+                Operand z = Attribute(AttributeConsts.PositionZ | AttributeConsts.LoadOutputMask);
+                Operand w = Attribute(AttributeConsts.PositionW | AttributeConsts.LoadOutputMask);
+                Operand halfW = this.FPMultiply(w, ConstF(0.5f));
+
+                this.Copy(Attribute(AttributeConsts.PositionZ), this.FPFusedMultiplyAdd(z, ConstF(0.5f), halfW));
+            }
+        }
+
+        public void PrepareForVertexReturn(out Operand oldXLocal, out Operand oldYLocal, out Operand oldZLocal)
+        {
+            if (Config.GpuAccessor.QueryViewportTransformDisable())
+            {
+                oldXLocal = Local();
+                this.Copy(oldXLocal, Attribute(AttributeConsts.PositionX | AttributeConsts.LoadOutputMask));
+                oldYLocal = Local();
+                this.Copy(oldYLocal, Attribute(AttributeConsts.PositionY | AttributeConsts.LoadOutputMask));
+            }
+            else
+            {
+                oldXLocal = null;
+                oldYLocal = null;
+            }
+
+            if (Config.Options.TargetApi == TargetApi.Vulkan && Config.GpuAccessor.QueryTransformDepthMinusOneToOne())
+            {
+                oldZLocal = Local();
+                this.Copy(oldZLocal, Attribute(AttributeConsts.PositionZ | AttributeConsts.LoadOutputMask));
+            }
+            else
+            {
+                oldZLocal = null;
+            }
+
+            PrepareForVertexReturn();
+        }
+
         public void PrepareForReturn()
         {
-            if (!IsNonMain && Config.Stage == ShaderStage.Fragment)
+            if (IsNonMain)
             {
+                return;
+            }
+
+            if (Config.LastInVertexPipeline &&
+                (Config.Stage == ShaderStage.Vertex || Config.Stage == ShaderStage.TessellationEvaluation) &&
+                (Config.Options.Flags & TranslationFlags.VertexA) == 0)
+            {
+                PrepareForVertexReturn();
+            }
+            else if (Config.Stage == ShaderStage.Geometry)
+            {
+                void WriteOutput(int index, int primIndex)
+                {
+                    Operand x = this.LoadAttribute(Const(index), Const(0), Const(primIndex));
+                    Operand y = this.LoadAttribute(Const(index + 4), Const(0), Const(primIndex));
+                    Operand z = this.LoadAttribute(Const(index + 8), Const(0), Const(primIndex));
+                    Operand w = this.LoadAttribute(Const(index + 12), Const(0), Const(primIndex));
+
+                    this.Copy(Attribute(index), x);
+                    this.Copy(Attribute(index + 4), y);
+                    this.Copy(Attribute(index + 8), z);
+                    this.Copy(Attribute(index + 12), w);
+                }
+
+                if (Config.GpPassthrough)
+                {
+                    int inputVertices = Config.GpuAccessor.QueryPrimitiveTopology().ToInputVertices();
+
+                    for (int primIndex = 0; primIndex < inputVertices; primIndex++)
+                    {
+                        WriteOutput(AttributeConsts.PositionX, primIndex);
+
+                        int passthroughAttributes = Config.PassthroughAttributes;
+                        while (passthroughAttributes != 0)
+                        {
+                            int index = BitOperations.TrailingZeroCount(passthroughAttributes);
+                            WriteOutput(AttributeConsts.UserAttributeBase + index * 16, primIndex);
+                            Config.SetOutputUserAttribute(index, perPatch: false);
+                            passthroughAttributes &= ~(1 << index);
+                        }
+
+                        this.EmitVertex();
+                    }
+
+                    this.EndPrimitive();
+                }
+            }
+            else if (Config.Stage == ShaderStage.Fragment)
+            {
+                GenerateAlphaToCoverageDitherDiscard();
+
+                bool supportsBgra = Config.GpuAccessor.QueryHostSupportsBgraFormat();
+
                 if (Config.OmapDepth)
                 {
                     Operand dest = Attribute(AttributeConsts.FragmentOutputDepth);
@@ -167,7 +286,40 @@ namespace Ryujinx.Graphics.Shader.Translation
                     this.Copy(dest, src);
                 }
 
-                bool supportsBgra = Config.GpuAccessor.QueryHostSupportsBgraFormat();
+                AlphaTestOp alphaTestOp = Config.GpuAccessor.QueryAlphaTestCompare();
+
+                if (alphaTestOp != AlphaTestOp.Always && (Config.OmapTargets & 8) != 0)
+                {
+                    if (alphaTestOp == AlphaTestOp.Never)
+                    {
+                        this.Discard();
+                    }
+                    else
+                    {
+                        Instruction comparator = alphaTestOp switch
+                        {
+                            AlphaTestOp.Equal => Instruction.CompareEqual,
+                            AlphaTestOp.Greater => Instruction.CompareGreater,
+                            AlphaTestOp.GreaterOrEqual => Instruction.CompareGreaterOrEqual,
+                            AlphaTestOp.Less => Instruction.CompareLess,
+                            AlphaTestOp.LessOrEqual => Instruction.CompareLessOrEqual,
+                            AlphaTestOp.NotEqual => Instruction.CompareNotEqual,
+                            _ => 0
+                        };
+
+                        Debug.Assert(comparator != 0, $"Invalid alpha test operation \"{alphaTestOp}\".");
+
+                        Operand alpha = Register(3, RegisterType.Gpr);
+                        Operand alphaRef = ConstF(Config.GpuAccessor.QueryAlphaTestReference());
+                        Operand alphaPass = Add(Instruction.FP32 | comparator, Local(), alpha, alphaRef);
+                        Operand alphaPassLabel = Label();
+
+                        this.BranchIfTrue(alphaPassLabel, alphaPass);
+                        this.Discard();
+                        this.MarkLabel(alphaPassLabel);
+                    }
+                }
+
                 int regIndexBase = 0;
 
                 for (int rtIndex = 0; rtIndex < 8; rtIndex++)
@@ -217,6 +369,35 @@ namespace Ryujinx.Graphics.Shader.Translation
                     }
                 }
             }
+        }
+
+        private void GenerateAlphaToCoverageDitherDiscard()
+        {
+            // If the feature is disabled, or alpha is not written, then we're done.
+            if (!Config.GpuAccessor.QueryAlphaToCoverageDitherEnable() || (Config.OmapTargets & 8) == 0)
+            {
+                return;
+            }
+
+            // 11 11 11 10 10 10 10 00
+            // 11 01 01 01 01 00 00 00
+            Operand ditherMask = Const(unchecked((int)0xfbb99110u));
+
+            Operand x = this.BitwiseAnd(this.FP32ConvertToU32(Attribute(AttributeConsts.PositionX)), Const(1));
+            Operand y = this.BitwiseAnd(this.FP32ConvertToU32(Attribute(AttributeConsts.PositionY)), Const(1));
+            Operand xy = this.BitwiseOr(x, this.ShiftLeft(y, Const(1)));
+
+            Operand alpha = Register(3, RegisterType.Gpr);
+            Operand scaledAlpha = this.FPMultiply(this.FPSaturate(alpha), ConstF(8));
+            Operand quantizedAlpha = this.IMinimumU32(this.FP32ConvertToU32(scaledAlpha), Const(7));
+            Operand shift = this.BitwiseOr(this.ShiftLeft(quantizedAlpha, Const(2)), xy);
+            Operand opaque = this.BitwiseAnd(this.ShiftRightU32(ditherMask, shift), Const(1));
+
+            Operand a2cDitherEndLabel = Label();
+
+            this.BranchIfTrue(a2cDitherEndLabel, opaque);
+            this.Discard();
+            this.MarkLabel(a2cDitherEndLabel);
         }
 
         public Operation[] GetOperations()

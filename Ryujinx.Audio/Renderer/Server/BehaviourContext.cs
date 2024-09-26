@@ -1,20 +1,3 @@
-//
-// Copyright (c) 2019-2021 Ryujinx
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-
 using System;
 using System.Diagnostics;
 using static Ryujinx.Audio.Renderer.Common.BehaviourParameter;
@@ -108,9 +91,17 @@ namespace Ryujinx.Audio.Renderer.Server
         public const int Revision10 = 10 << 24;
 
         /// <summary>
+        /// REV11:
+        /// The "legacy" effects (Delay, Reverb and Reverb 3D) were updated to match the standard channel mapping used by the audio renderer.
+        /// A new version of the command estimator was added to address timing changes caused by the legacy effects changes.
+        /// </summary>
+        /// <remarks>This was added in system update 14.0.0</remarks>
+        public const int Revision11 = 11 << 24;
+
+        /// <summary>
         /// Last revision supported by the implementation.
         /// </summary>
-        public const int LastRevision = Revision10;
+        public const int LastRevision = Revision11;
 
         /// <summary>
         /// Target revision magic supported by the implementation.
@@ -150,8 +141,8 @@ namespace Ryujinx.Audio.Renderer.Server
         public BehaviourContext()
         {
             UserRevision = 0;
-            _errorInfos  = new ErrorInfo[Constants.MaxErrorInfos];
-            _errorIndex  = 0;
+            _errorInfos = new ErrorInfo[Constants.MaxErrorInfos];
+            _errorIndex = 0;
         }
 
         /// <summary>
@@ -367,11 +358,25 @@ namespace Ryujinx.Audio.Renderer.Server
         }
 
         /// <summary>
+        /// Check if the audio renderer should support new channel resource mapping for 5.1 on Delay, Reverb and Reverb 3D effects.
+        /// </summary>
+        /// <returns>True if the audio renderer support new channel resource mapping for 5.1.</returns>
+        public bool IsNewEffectChannelMappingSupported()
+        {
+            return CheckFeatureSupported(UserRevision, BaseRevisionMagic + Revision11);
+        }
+
+        /// <summary>
         /// Get the version of the <see cref="ICommandProcessingTimeEstimator"/>.
         /// </summary>
         /// <returns>The version of the <see cref="ICommandProcessingTimeEstimator"/>.</returns>
         public int GetCommandProcessingTimeEstimatorVersion()
         {
+            if (CheckFeatureSupported(UserRevision, BaseRevisionMagic + Revision11))
+            {
+                return 5;
+            }
+
             if (CheckFeatureSupported(UserRevision, BaseRevisionMagic + Revision10))
             {
                 return 4;

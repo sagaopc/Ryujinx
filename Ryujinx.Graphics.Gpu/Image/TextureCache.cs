@@ -7,7 +7,6 @@ using Ryujinx.Graphics.Gpu.Engine.Types;
 using Ryujinx.Graphics.Gpu.Image;
 using Ryujinx.Graphics.Gpu.Memory;
 using Ryujinx.Graphics.Texture;
-using Ryujinx.Memory;
 using Ryujinx.Memory.Range;
 using System;
 using System.Collections.Generic;
@@ -40,6 +39,7 @@ namespace Ryujinx.Graphics.Gpu.Image
         private readonly PhysicalMemory _physicalMemory;
 
         private readonly MultiRangeList<Texture> _textures;
+        private readonly HashSet<Texture> _partiallyMappedTextures;
 
         private Texture[] _textureOverlaps;
         private OverlapInfo[] _overlapInfo;
@@ -57,6 +57,7 @@ namespace Ryujinx.Graphics.Gpu.Image
             _physicalMemory = physicalMemory;
 
             _textures = new MultiRangeList<Texture>();
+            _partiallyMappedTextures = new HashSet<Texture>();
 
             _textureOverlaps = new Texture[OverlapsBufferInitialCapacity];
             _overlapInfo = new OverlapInfo[OverlapsBufferInitialCapacity];
@@ -74,17 +75,7 @@ namespace Ryujinx.Graphics.Gpu.Image
             Texture[] overlaps = new Texture[10];
             int overlapCount;
 
-            MultiRange unmapped;
-
-            try
-            {
-                unmapped = ((MemoryManager)sender).GetPhysicalRegions(e.Address, e.Size);
-            }
-            catch (InvalidMemoryRegionException)
-            {
-                // This event fires on Map in case any mappings are overwritten. In that case, there may not be an existing mapping.
-                return;
-            }
+            MultiRange unmapped = ((MemoryManager)sender).GetPhysicalRegions(e.Address, e.Size);
 
             lock (_textures)
             {
@@ -94,6 +85,24 @@ namespace Ryujinx.Graphics.Gpu.Image
             for (int i = 0; i < overlapCount; i++)
             {
                 overlaps[i].Unmapped(unmapped);
+            }
+
+            // If any range was previously unmapped, we also need to purge
+            // all partially mapped texture, as they might be fully mapped now.
+            for (int i = 0; i < unmapped.Count; i++)
+            {
+                if (unmapped.GetSubRange(i).Address == MemoryManager.PteUnmapped)
+                {
+                    lock (_partiallyMappedTextures)
+                    {
+                        foreach (var texture in _partiallyMappedTextures)
+                        {
+                            texture.Unmapped(unmapped);
+                        }
+                    }
+
+                    break;
+                }
             }
         }
 
@@ -165,6 +174,14 @@ namespace Ryujinx.Graphics.Gpu.Image
                 }
             }
 
+            if (info.Width == info.Height * info.Height)
+            {
+                // Possibly used for a "3D texture" drawn onto a 2D surface.
+                // Some games do this to generate a tone mapping LUT without rendering into 3D texture slices.
+
+                return false;
+            }
+
             return true;
         }
 
@@ -194,6 +211,7 @@ namespace Ryujinx.Graphics.Gpu.Image
             TwodTexture copyTexture,
             ulong offset,
             FormatInfo formatInfo,
+            bool shouldCreate,
             bool preferScaling = true,
             Size? sizeHint = null)
         {
@@ -232,6 +250,11 @@ namespace Ryujinx.Graphics.Gpu.Image
             if (preferScaling)
             {
                 flags |= TextureSearchFlags.WithUpscale;
+            }
+
+            if (!shouldCreate)
+            {
+                flags |= TextureSearchFlags.NoCreate;
             }
 
             Texture texture = FindOrCreateTexture(memoryManager, flags, info, 0, sizeHint);
@@ -334,6 +357,7 @@ namespace Ryujinx.Graphics.Gpu.Image
         /// <param name="memoryManager">GPU memory manager where the texture is mapped</param>
         /// <param name="dsState">Depth-stencil buffer texture to find or create</param>
         /// <param name="size">Size of the depth-stencil texture</param>
+        /// <param name="layered">Indicates if the texture might be accessed with a non-zero layer index</param>
         /// <param name="samplesInX">Number of samples in the X direction, for MSAA</param>
         /// <param name="samplesInY">Number of samples in the Y direction, for MSAA</param>
         /// <param name="sizeHint">A hint indicating the minimum used size for the texture</param>
@@ -342,6 +366,7 @@ namespace Ryujinx.Graphics.Gpu.Image
             MemoryManager memoryManager,
             RtDepthStencilState dsState,
             Size3D size,
+            bool layered,
             int samplesInX,
             int samplesInY,
             Size sizeHint)
@@ -349,9 +374,24 @@ namespace Ryujinx.Graphics.Gpu.Image
             int gobBlocksInY = dsState.MemoryLayout.UnpackGobBlocksInY();
             int gobBlocksInZ = dsState.MemoryLayout.UnpackGobBlocksInZ();
 
-            Target target = (samplesInX | samplesInY) != 1
-                ? Target.Texture2DMultisample
-                : Target.Texture2D;
+            Target target;
+
+            if (dsState.MemoryLayout.UnpackIsTarget3D())
+            {
+                target = Target.Texture3D;
+            }
+            else if ((samplesInX | samplesInY) != 1)
+            {
+                target = size.Depth > 1 && layered
+                    ? Target.Texture2DMultisampleArray
+                    : Target.Texture2DMultisample;
+            }
+            else
+            {
+                target = size.Depth > 1 && layered
+                    ? Target.Texture2DArray
+                    : Target.Texture2D;
+            }
 
             FormatInfo formatInfo = dsState.Format.Convert();
 
@@ -480,15 +520,29 @@ namespace Ryujinx.Graphics.Gpu.Image
 
                 return texture;
             }
+            else if (flags.HasFlag(TextureSearchFlags.NoCreate))
+            {
+                return null;
+            }
 
             // Calculate texture sizes, used to find all overlapping textures.
             SizeInfo sizeInfo = info.CalculateSizeInfo(layerSize);
 
             ulong size = (ulong)sizeInfo.TotalSize;
+            bool partiallyMapped = false;
 
             if (range == null)
             {
                 range = memoryManager.GetPhysicalRegions(info.GpuAddress, size);
+
+                for (int i = 0; i < range.Value.Count; i++)
+                {
+                    if (range.Value.GetSubRange(i).Address == MemoryManager.PteUnmapped)
+                    {
+                        partiallyMapped = true;
+                        break;
+                    }
+                }
             }
 
             // Find view compatible matches.
@@ -513,7 +567,13 @@ namespace Ryujinx.Graphics.Gpu.Image
             for (int index = 0; index < overlapsCount; index++)
             {
                 Texture overlap = _textureOverlaps[index];
-                TextureViewCompatibility overlapCompatibility = overlap.IsViewCompatible(info, range.Value, sizeInfo.LayerSize, _context.Capabilities, out int firstLayer, out int firstLevel);
+                TextureViewCompatibility overlapCompatibility = overlap.IsViewCompatible(
+                    info,
+                    range.Value,
+                    sizeInfo.LayerSize,
+                    _context.Capabilities,
+                    out int firstLayer,
+                    out int firstLevel);
 
                 if (overlapCompatibility == TextureViewCompatibility.Full)
                 {
@@ -621,7 +681,13 @@ namespace Ryujinx.Graphics.Gpu.Image
                     Texture overlap = _textureOverlaps[index];
                     bool overlapInCache = overlap.CacheNode != null;
 
-                    TextureViewCompatibility compatibility = texture.IsViewCompatible(overlap.Info, overlap.Range, overlap.LayerSize, _context.Capabilities, out int firstLayer, out int firstLevel);
+                    TextureViewCompatibility compatibility = texture.IsViewCompatible(
+                        overlap.Info,
+                        overlap.Range,
+                        overlap.LayerSize,
+                        _context.Capabilities,
+                        out int firstLayer,
+                        out int firstLevel);
 
                     if (overlap.IsView && compatibility == TextureViewCompatibility.Full)
                     {
@@ -658,7 +724,7 @@ namespace Ryujinx.Graphics.Gpu.Image
                     else
                     {
                         bool dataOverlaps = texture.DataOverlaps(overlap, compatibility);
-                        
+
                         if (!overlap.IsView && dataOverlaps && !incompatibleOverlaps.Exists(incompatible => incompatible.Group == overlap.Group))
                         {
                             incompatibleOverlaps.Add(new TextureIncompatibleOverlap(overlap.Group, compatibility));
@@ -774,6 +840,14 @@ namespace Ryujinx.Graphics.Gpu.Image
                 _textures.Add(texture);
             }
 
+            if (partiallyMapped)
+            {
+                lock (_partiallyMappedTextures)
+                {
+                    _partiallyMappedTextures.Add(texture);
+                }
+            }
+
             ShrinkOverlapsBufferIfNeeded();
 
             for (int i = 0; i < overlapsCount; i++)
@@ -826,23 +900,25 @@ namespace Ryujinx.Graphics.Gpu.Image
         /// Tries to find an existing texture matching the given buffer copy destination. If none is found, returns null.
         /// </summary>
         /// <param name="memoryManager">GPU memory manager where the texture is mapped</param>
-        /// <param name="tex">The texture information</param>
         /// <param name="gpuVa">GPU virtual address of the texture</param>
         /// <param name="bpp">Bytes per pixel</param>
         /// <param name="stride">If <paramref name="linear"/> is true, should have the texture stride, otherwise ignored</param>
+        /// <param name="height">If <paramref name="linear"/> is false, should have the texture height, otherwise ignored</param>
         /// <param name="xCount">Number of pixels to be copied per line</param>
         /// <param name="yCount">Number of lines to be copied</param>
         /// <param name="linear">True if the texture has a linear layout, false otherwise</param>
+        /// <param name="memoryLayout">If <paramref name="linear"/> is false, should have the memory layout, otherwise ignored</param>
         /// <returns>A matching texture, or null if there is no match</returns>
         public Texture FindTexture(
             MemoryManager memoryManager,
-            DmaTexture tex,
             ulong gpuVa,
             int bpp,
             int stride,
+            int height,
             int xCount,
             int yCount,
-            bool linear)
+            bool linear,
+            MemoryLayout memoryLayout)
         {
             ulong address = memoryManager.Translate(gpuVa);
 
@@ -871,7 +947,7 @@ namespace Ryujinx.Graphics.Gpu.Image
                 {
                     // Size is not available for linear textures. Use the stride and end of the copy region instead.
 
-                    match = texture.Info.IsLinear && texture.Info.Stride == stride && tex.RegionY + yCount <= texture.Info.Height;
+                    match = texture.Info.IsLinear && texture.Info.Stride == stride && yCount == texture.Info.Height;
                 }
                 else
                 {
@@ -879,10 +955,10 @@ namespace Ryujinx.Graphics.Gpu.Image
                     // Due to the way linear strided and block layouts work, widths can be multiplied by Bpp for comparison.
                     // Note: tex.Width is the aligned texture size. Prefer param.XCount, as the destination should be a texture with that exact size.
 
-                    bool sizeMatch = xCount * bpp == texture.Info.Width * format.BytesPerPixel && tex.Height == texture.Info.Height;
+                    bool sizeMatch = xCount * bpp == texture.Info.Width * format.BytesPerPixel && height == texture.Info.Height;
                     bool formatMatch = !texture.Info.IsLinear &&
-                                        texture.Info.GobBlocksInY == tex.MemoryLayout.UnpackGobBlocksInY() &&
-                                        texture.Info.GobBlocksInZ == tex.MemoryLayout.UnpackGobBlocksInZ();
+                                        texture.Info.GobBlocksInY == memoryLayout.UnpackGobBlocksInY() &&
+                                        texture.Info.GobBlocksInZ == memoryLayout.UnpackGobBlocksInZ();
 
                     match = sizeMatch && formatMatch;
                 }
@@ -963,20 +1039,34 @@ namespace Ryujinx.Graphics.Gpu.Image
                 depthOrLayers = info.DepthOrLayers;
             }
 
+            // 2D and 2D multisample textures are not considered compatible.
+            // This specific case is required for copies, where the source texture might be multisample.
+            // In this case, we inherit the parent texture multisample state.
+            Target target = info.Target;
+            int samplesInX = info.SamplesInX;
+            int samplesInY = info.SamplesInY;
+
+            if (target == Target.Texture2D && parent.Target == Target.Texture2DMultisample)
+            {
+                target = Target.Texture2DMultisample;
+                samplesInX = parent.Info.SamplesInX;
+                samplesInY = parent.Info.SamplesInY;
+            }
+
             return new TextureInfo(
                 info.GpuAddress,
                 width,
                 height,
                 depthOrLayers,
                 info.Levels,
-                info.SamplesInX,
-                info.SamplesInY,
+                samplesInX,
+                samplesInY,
                 info.Stride,
                 info.IsLinear,
                 info.GobBlocksInY,
                 info.GobBlocksInZ,
                 info.GobBlocksInTileX,
-                info.Target,
+                target,
                 info.FormatInfo,
                 info.DepthStencilMode,
                 info.SwizzleR,
@@ -1068,6 +1158,11 @@ namespace Ryujinx.Graphics.Gpu.Image
             lock (_textures)
             {
                 _textures.Remove(texture);
+            }
+
+            lock (_partiallyMappedTextures)
+            {
+                _partiallyMappedTextures.Remove(texture);
             }
         }
 

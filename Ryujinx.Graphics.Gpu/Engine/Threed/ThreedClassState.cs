@@ -311,6 +311,15 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
         {
             return Attribute & 0x3fe00000;
         }
+
+         /// <summary>
+        /// Unpacks the Maxwell attribute component type.
+        /// </summary>
+        /// <returns>Attribute component type</returns>
+        public uint UnpackType()
+        {
+            return (Attribute >> 27) & 7;
+        }
     }
 
     /// <summary>
@@ -730,7 +739,9 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
         public int PatchVertices;
         public fixed uint ReservedDD0[4];
         public uint TextureBarrier;
-        public fixed uint ReservedDE4[7];
+        public uint WatchdogTimer;
+        public Boolean32 PrimitiveRestartDrawArrays;
+        public fixed uint ReservedDEC[5];
         public Array16<ScissorState> ScissorState;
         public fixed uint ReservedF00[21];
         public StencilBackMasks StencilBackMasks;
@@ -757,15 +768,16 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
         public fixed uint Reserved10B0[18];
         public uint ClearFlags;
         public fixed uint Reserved10FC[25];
-        public Array16<VertexAttribState> VertexAttribState;
-        public fixed uint Reserved11A0[31];
+        public Array32<VertexAttribState> VertexAttribState;
+        public fixed uint Reserved11E0[15];
         public RtControl RtControl;
         public fixed uint Reserved1220[2];
         public Size3D RtDepthStencilSize;
         public SamplerIndex SamplerIndex;
         public fixed uint Reserved1238[37];
         public Boolean32 DepthTestEnable;
-        public fixed uint Reserved12D0[5];
+        public fixed uint Reserved12D0[4];
+        public Boolean32 AlphaToCoverageDitherEnable;
         public Boolean32 BlendIndependent;
         public Boolean32 DepthWriteEnable;
         public Boolean32 AlphaTestEnable;
@@ -800,9 +812,10 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
         public Boolean32 PointSpriteEnable;
         public fixed uint Reserved1524[3];
         public uint ResetCounter;
-        public uint Reserved1534;
+        public Boolean32 MultisampleEnable;
         public Boolean32 RtDepthStencilEnable;
-        public fixed uint Reserved153C[5];
+        public uint MultisampleControl;
+        public fixed uint Reserved1540[4];
         public GpuVa RenderEnableAddress;
         public Condition RenderEnableCondition;
         public PoolState SamplerPoolState;

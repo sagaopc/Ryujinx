@@ -308,7 +308,8 @@ namespace Ryujinx.Graphics.Shader.Decoders
                     int attr = offset + elemIndex * 4;
                     if (attr >= AttributeConsts.UserAttributeBase && attr < AttributeConsts.UserAttributeEnd)
                     {
-                        int index = (attr - AttributeConsts.UserAttributeBase) / 16;
+                        int userAttr = attr - AttributeConsts.UserAttributeBase;
+                        int index = userAttr / 16;
 
                         if (isStore)
                         {
@@ -316,7 +317,7 @@ namespace Ryujinx.Graphics.Shader.Decoders
                         }
                         else
                         {
-                            config.SetInputUserAttribute(index, perPatch);
+                            config.SetInputUserAttribute(index, (userAttr >> 2) & 3, perPatch);
                         }
                     }
 
@@ -339,7 +340,7 @@ namespace Ryujinx.Graphics.Shader.Decoders
         {
             InstConditional condOp = new InstConditional(op.RawOpCode);
 
-            if (op.Name == InstName.Exit && condOp.Ccc != Ccc.T)
+            if ((op.Name == InstName.Bra || op.Name == InstName.Exit) && condOp.Ccc != Ccc.T)
             {
                 return false;
             }
@@ -372,7 +373,7 @@ namespace Ryujinx.Graphics.Shader.Decoders
 
                     for (int i = 0; i < cbOffsetsCount; i++)
                     {
-                        uint targetOffset = config.GpuAccessor.ConstantBuffer1Read(cbBaseOffset + i * 4);
+                        uint targetOffset = config.ConstantBuffer1Read(cbBaseOffset + i * 4);
                         Block target = getBlock(baseOffset + targetOffset);
                         target.Predecessors.Add(block);
                         block.Successors.Add(target);
@@ -671,6 +672,7 @@ namespace Ryujinx.Graphics.Shader.Decoders
                     // Make sure we found the correct address,
                     // the push and pop instruction types must match, so:
                     // - BRK can only consume addresses pushed by PBK.
+                    // - CONT can only consume addresses pushed by PCNT.
                     // - SYNC can only consume addresses pushed by SSY.
                     if (found)
                     {

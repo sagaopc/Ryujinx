@@ -2,7 +2,6 @@ using LibHac;
 using LibHac.Common;
 using LibHac.Fs;
 using LibHac.Fs.Shim;
-using LibHac.FsSrv;
 using LibHac.FsSrv.Impl;
 using LibHac.FsSystem;
 using LibHac.Ncm;
@@ -19,7 +18,6 @@ using static Ryujinx.HLE.Utilities.StringUtils;
 using IFileSystem = LibHac.FsSrv.Sf.IFileSystem;
 using IStorage = LibHac.FsSrv.Sf.IStorage;
 using RightsId = LibHac.Fs.RightsId;
-using StorageId = Ryujinx.HLE.FileSystem.StorageId;
 
 namespace Ryujinx.HLE.HOS.Services.Fs
 {
@@ -28,7 +26,7 @@ namespace Ryujinx.HLE.HOS.Services.Fs
     {
         private SharedRef<LibHac.FsSrv.Sf.IFileSystemProxy> _baseFileSystemProxy;
 
-        public IFileSystemProxy(ServiceCtx context)
+        public IFileSystemProxy(ServiceCtx context) : base(context.Device.System.FsServer)
         {
             var applicationClient = context.Device.System.LibHacHorizonManager.ApplicationClient;
             _baseFileSystemProxy = applicationClient.Fs.Impl.GetFileSystemProxyServiceObject();

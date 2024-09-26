@@ -115,7 +115,7 @@ namespace ARMeilleure.Translation
             SetDelegateInfo(typeof(NativeInterface).GetMethod(nameof(NativeInterface.GetFpsr)));
             SetDelegateInfo(typeof(NativeInterface).GetMethod(nameof(NativeInterface.GetFunctionAddress)));
             SetDelegateInfo(typeof(NativeInterface).GetMethod(nameof(NativeInterface.InvalidateCacheLine)));
-            SetDelegateInfo(typeof(NativeInterface).GetMethod(nameof(NativeInterface.GetTpidr)));
+            SetDelegateInfo(typeof(NativeInterface).GetMethod(nameof(NativeInterface.GetTpidrroEl0)));
             SetDelegateInfo(typeof(NativeInterface).GetMethod(nameof(NativeInterface.GetTpidr32))); // A32 only.
             SetDelegateInfo(typeof(NativeInterface).GetMethod(nameof(NativeInterface.GetTpidrEl0)));
             SetDelegateInfo(typeof(NativeInterface).GetMethod(nameof(NativeInterface.GetTpidrEl032))); // A32 only.
@@ -206,6 +206,7 @@ namespace ARMeilleure.Translation
             SetDelegateInfo(typeof(SoftFallback).GetMethod(nameof(SoftFallback.UnsignedSrcUnsignedDstSatQ)));
 
             SetDelegateInfo(typeof(SoftFloat16_32).GetMethod(nameof(SoftFloat16_32.FPConvert)));
+            SetDelegateInfo(typeof(SoftFloat16_64).GetMethod(nameof(SoftFloat16_64.FPConvert)));
 
             SetDelegateInfo(typeof(SoftFloat32).GetMethod(nameof(SoftFloat32.FPAdd)));
             SetDelegateInfo(typeof(SoftFloat32).GetMethod(nameof(SoftFloat32.FPAddFpscr))); // A32 only.
@@ -294,6 +295,8 @@ namespace ARMeilleure.Translation
             SetDelegateInfo(typeof(SoftFloat64).GetMethod(nameof(SoftFloat64.FPRSqrtStepFused)));
             SetDelegateInfo(typeof(SoftFloat64).GetMethod(nameof(SoftFloat64.FPSqrt)));
             SetDelegateInfo(typeof(SoftFloat64).GetMethod(nameof(SoftFloat64.FPSub)));
+
+            SetDelegateInfo(typeof(SoftFloat64_16).GetMethod(nameof(SoftFloat64_16.FPConvert)));
         }
     }
 }

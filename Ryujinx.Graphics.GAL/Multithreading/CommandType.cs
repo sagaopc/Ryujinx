@@ -3,7 +3,6 @@
     enum CommandType : byte
     {
         Action,
-        CompileShader,
         CreateBuffer,
         CreateProgram,
         CreateSampler,
@@ -28,8 +27,6 @@
         ProgramCheckLink,
 
         SamplerDispose,
-
-        ShaderDispose,
 
         TextureCopyTo,
         TextureCopyToScaled,
@@ -74,6 +71,7 @@
         SetIndexBuffer,
         SetLineParameters,
         SetLogicOpState,
+        SetMultisampleState,
         SetPatchParameters,
         SetPointParameters,
         SetPolygonMode,
@@ -84,10 +82,9 @@
         SetRenderTargetColorMasks,
         SetRenderTargetScale,
         SetRenderTargets,
-        SetSampler,
         SetScissor,
         SetStencilTest,
-        SetTexture,
+        SetTextureAndSampler,
         SetUserClipDistance,
         SetVertexAttribs,
         SetVertexBuffers,

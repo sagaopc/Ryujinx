@@ -1,20 +1,3 @@
-//
-// Copyright (c) 2019-2021 Ryujinx
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-
 using Ryujinx.Audio.Renderer.Dsp.State;
 using Ryujinx.Audio.Renderer.Parameter.Effect;
 using Ryujinx.Audio.Renderer.Server.Effect;
@@ -63,7 +46,7 @@ namespace Ryujinx.Audio.Renderer.Dsp.Command
 
         private Reverb3dParameter _parameter;
 
-        public Reverb3dCommand(uint bufferOffset, Reverb3dParameter parameter, Memory<Reverb3dState> state, bool isEnabled, ulong workBuffer, int nodeId)
+        public Reverb3dCommand(uint bufferOffset, Reverb3dParameter parameter, Memory<Reverb3dState> state, bool isEnabled, ulong workBuffer, int nodeId, bool newEffectChannelMappingSupported)
         {
             Enabled = true;
             IsEffectEnabled = isEnabled;
@@ -80,6 +63,11 @@ namespace Ryujinx.Audio.Renderer.Dsp.Command
                 InputBufferIndices[i] = (ushort)(bufferOffset + Parameter.Input[i]);
                 OutputBufferIndices[i] = (ushort)(bufferOffset + Parameter.Output[i]);
             }
+
+            // NOTE: We do the opposite as Nintendo here for now to restore previous behaviour
+            // TODO: Update reverb 3d processing and remove this to use RemapLegacyChannelEffectMappingToChannelResourceMapping.
+            DataSourceHelper.RemapChannelResourceMappingToLegacy(newEffectChannelMappingSupported, InputBufferIndices);
+            DataSourceHelper.RemapChannelResourceMappingToLegacy(newEffectChannelMappingSupported, OutputBufferIndices);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -194,7 +182,7 @@ namespace Ryujinx.Audio.Renderer.Dsp.Command
 
                 if (isSurround)
                 {
-                    *((float*)outputBuffers[4] + sampleIndex) += (outputValues[4] + state.BackLeftDelayLine.Update((values[2] - values[3]) * 0.5f) + channelInput[4] * state.DryGain);
+                    *((float*)outputBuffers[4] + sampleIndex) += (outputValues[4] + state.FrontCenterDelayLine.Update((values[2] - values[3]) * 0.5f) + channelInput[4] * state.DryGain);
                 }
             }
         }

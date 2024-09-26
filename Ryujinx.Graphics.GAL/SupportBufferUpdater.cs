@@ -18,6 +18,7 @@ namespace Ryujinx.Graphics.GAL
         {
             _renderer = renderer;
             Handle = renderer.CreateBuffer(SupportBuffer.RequiredSize);
+            renderer.Pipeline.ClearBuffer(Handle, 0, SupportBuffer.RequiredSize, 0);
         }
 
         private void MarkDirty(int startOffset, int byteSize)
@@ -70,6 +71,13 @@ namespace Ryujinx.Graphics.GAL
         public void UpdateFragmentIsBgra(ReadOnlySpan<Vector4<int>> data, int offset, int count)
         {
             UpdateGenericField(SupportBuffer.FragmentIsBgraOffset, data, Data.FragmentIsBgra.ToSpan(), offset, count);
+        }
+
+        public void UpdateViewportInverse(Vector4<float> data)
+        {
+            Data.ViewportInverse = data;
+
+            MarkDirty(SupportBuffer.ViewportInverseOffset, SupportBuffer.FieldSize);
         }
 
         public void Commit()

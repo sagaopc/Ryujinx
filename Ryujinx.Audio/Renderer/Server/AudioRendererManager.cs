@@ -1,24 +1,8 @@
-//
-// Copyright (c) 2019-2021 Ryujinx
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-
 using Ryujinx.Audio.Integration;
 using Ryujinx.Audio.Renderer.Dsp;
 using Ryujinx.Audio.Renderer.Parameter;
 using Ryujinx.Common.Logging;
+using Ryujinx.Cpu;
 using Ryujinx.Memory;
 using System;
 using System.Diagnostics;
@@ -78,6 +62,11 @@ namespace Ryujinx.Audio.Renderer.Server
         private IHardwareDeviceDriver _deviceDriver;
 
         /// <summary>
+        /// Tick source used to measure elapsed time.
+        /// </summary>
+        public ITickSource TickSource { get; }
+
+        /// <summary>
         /// The <see cref="AudioProcessor"/> instance associated to this manager.
         /// </summary>
         public AudioProcessor Processor { get; }
@@ -90,9 +79,11 @@ namespace Ryujinx.Audio.Renderer.Server
         /// <summary>
         /// Create a new <see cref="AudioRendererManager"/>.
         /// </summary>
-        public AudioRendererManager()
+        /// <param name="tickSource">Tick source used to measure elapsed time.</param>
+        public AudioRendererManager(ITickSource tickSource)
         {
             Processor = new AudioProcessor();
+            TickSource = tickSource;
             _sessionIds = new int[Constants.AudioRendererSessionCountMax];
             _sessions = new AudioRenderSystem[Constants.AudioRendererSessionCountMax];
             _activeSessionCount = 0;

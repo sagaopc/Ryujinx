@@ -4,7 +4,6 @@ using Ryujinx.Graphics.GAL.Multithreading.Commands.CounterEvent;
 using Ryujinx.Graphics.GAL.Multithreading.Commands.Program;
 using Ryujinx.Graphics.GAL.Multithreading.Commands.Renderer;
 using Ryujinx.Graphics.GAL.Multithreading.Commands.Sampler;
-using Ryujinx.Graphics.GAL.Multithreading.Commands.Shader;
 using Ryujinx.Graphics.GAL.Multithreading.Commands.Texture;
 using Ryujinx.Graphics.GAL.Multithreading.Commands.Window;
 using System;
@@ -53,8 +52,6 @@ namespace Ryujinx.Graphics.GAL.Multithreading
         {
             _lookup[(int)CommandType.Action] = (Span<byte> memory, ThreadedRenderer threaded, IRenderer renderer) =>
                 ActionCommand.Run(ref GetCommand<ActionCommand>(memory), threaded, renderer);
-            _lookup[(int)CommandType.CompileShader] = (Span<byte> memory, ThreadedRenderer threaded, IRenderer renderer) =>
-                CompileShaderCommand.Run(ref GetCommand<CompileShaderCommand>(memory), threaded, renderer);
             _lookup[(int)CommandType.CreateBuffer] = (Span<byte> memory, ThreadedRenderer threaded, IRenderer renderer) =>
                 CreateBufferCommand.Run(ref GetCommand<CreateBufferCommand>(memory), threaded, renderer);
             _lookup[(int)CommandType.CreateProgram] = (Span<byte> memory, ThreadedRenderer threaded, IRenderer renderer) =>
@@ -97,9 +94,6 @@ namespace Ryujinx.Graphics.GAL.Multithreading
 
             _lookup[(int)CommandType.SamplerDispose] = (Span<byte> memory, ThreadedRenderer threaded, IRenderer renderer) =>
                 SamplerDisposeCommand.Run(ref GetCommand<SamplerDisposeCommand>(memory), threaded, renderer);
-
-            _lookup[(int)CommandType.ShaderDispose] = (Span<byte> memory, ThreadedRenderer threaded, IRenderer renderer) =>
-                ShaderDisposeCommand.Run(ref GetCommand<ShaderDisposeCommand>(memory), threaded, renderer);
 
             _lookup[(int)CommandType.TextureCopyTo] = (Span<byte> memory, ThreadedRenderer threaded, IRenderer renderer) =>
                 TextureCopyToCommand.Run(ref GetCommand<TextureCopyToCommand>(memory), threaded, renderer);
@@ -185,6 +179,8 @@ namespace Ryujinx.Graphics.GAL.Multithreading
                 SetLineParametersCommand.Run(ref GetCommand<SetLineParametersCommand>(memory), threaded, renderer);
             _lookup[(int)CommandType.SetLogicOpState] = (Span<byte> memory, ThreadedRenderer threaded, IRenderer renderer) =>
                 SetLogicOpStateCommand.Run(ref GetCommand<SetLogicOpStateCommand>(memory), threaded, renderer);
+            _lookup[(int)CommandType.SetMultisampleState] = (Span<byte> memory, ThreadedRenderer threaded, IRenderer renderer) =>
+                SetMultisampleStateCommand.Run(ref GetCommand<SetMultisampleStateCommand>(memory), threaded, renderer);
             _lookup[(int)CommandType.SetPatchParameters] = (Span<byte> memory, ThreadedRenderer threaded, IRenderer renderer) =>
                 SetPatchParametersCommand.Run(ref GetCommand<SetPatchParametersCommand>(memory), threaded, renderer);
             _lookup[(int)CommandType.SetPointParameters] = (Span<byte> memory, ThreadedRenderer threaded, IRenderer renderer) =>
@@ -205,14 +201,12 @@ namespace Ryujinx.Graphics.GAL.Multithreading
                 SetRenderTargetScaleCommand.Run(ref GetCommand<SetRenderTargetScaleCommand>(memory), threaded, renderer);
             _lookup[(int)CommandType.SetRenderTargets] = (Span<byte> memory, ThreadedRenderer threaded, IRenderer renderer) =>
                 SetRenderTargetsCommand.Run(ref GetCommand<SetRenderTargetsCommand>(memory), threaded, renderer);
-            _lookup[(int)CommandType.SetSampler] = (Span<byte> memory, ThreadedRenderer threaded, IRenderer renderer) =>
-                SetSamplerCommand.Run(ref GetCommand<SetSamplerCommand>(memory), threaded, renderer);
             _lookup[(int)CommandType.SetScissor] = (Span<byte> memory, ThreadedRenderer threaded, IRenderer renderer) =>
-                SetScissorCommand.Run(ref GetCommand<SetScissorCommand>(memory), threaded, renderer);
+                SetScissorsCommand.Run(ref GetCommand<SetScissorsCommand>(memory), threaded, renderer);
             _lookup[(int)CommandType.SetStencilTest] = (Span<byte> memory, ThreadedRenderer threaded, IRenderer renderer) =>
                 SetStencilTestCommand.Run(ref GetCommand<SetStencilTestCommand>(memory), threaded, renderer);
-            _lookup[(int)CommandType.SetTexture] = (Span<byte> memory, ThreadedRenderer threaded, IRenderer renderer) =>
-                SetTextureCommand.Run(ref GetCommand<SetTextureCommand>(memory), threaded, renderer);
+            _lookup[(int)CommandType.SetTextureAndSampler] = (Span<byte> memory, ThreadedRenderer threaded, IRenderer renderer) =>
+                SetTextureAndSamplerCommand.Run(ref GetCommand<SetTextureAndSamplerCommand>(memory), threaded, renderer);
             _lookup[(int)CommandType.SetUserClipDistance] = (Span<byte> memory, ThreadedRenderer threaded, IRenderer renderer) =>
                 SetUserClipDistanceCommand.Run(ref GetCommand<SetUserClipDistanceCommand>(memory), threaded, renderer);
             _lookup[(int)CommandType.SetVertexAttribs] = (Span<byte> memory, ThreadedRenderer threaded, IRenderer renderer) =>

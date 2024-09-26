@@ -18,13 +18,14 @@ namespace Ryujinx.Graphics.Shader
 
         public static int FragmentAlphaTestOffset;
         public static int FragmentIsBgraOffset;
+        public static int ViewportInverseOffset;
         public static int FragmentRenderScaleCountOffset;
         public static int GraphicsRenderScaleOffset;
         public static int ComputeRenderScaleOffset;
 
         public const int FragmentIsBgraCount = 8;
-        // One for the render target, 32 for the textures, and 8 for the images.
-        public const int RenderScaleMaxCount = 1 + 32 + 8;
+        // One for the render target, 64 for the textures, and 8 for the images.
+        public const int RenderScaleMaxCount = 1 + 64 + 8;
 
         private static int OffsetOf<T>(ref SupportBuffer storage, ref T target)
         {
@@ -40,6 +41,7 @@ namespace Ryujinx.Graphics.Shader
 
             FragmentAlphaTestOffset = OffsetOf(ref instance, ref instance.FragmentAlphaTest);
             FragmentIsBgraOffset = OffsetOf(ref instance, ref instance.FragmentIsBgra);
+            ViewportInverseOffset = OffsetOf(ref instance, ref instance.ViewportInverse);
             FragmentRenderScaleCountOffset = OffsetOf(ref instance, ref instance.FragmentRenderScaleCount);
             GraphicsRenderScaleOffset = OffsetOf(ref instance, ref instance.RenderScale);
             ComputeRenderScaleOffset = GraphicsRenderScaleOffset + FieldSize;
@@ -47,9 +49,10 @@ namespace Ryujinx.Graphics.Shader
 
         public Vector4<int> FragmentAlphaTest;
         public Array8<Vector4<int>> FragmentIsBgra;
+        public Vector4<float> ViewportInverse;
         public Vector4<int> FragmentRenderScaleCount;
 
-        // Render scale max count: 1 + 32 + 8. First scale is fragment output scale, others are textures/image inputs.
-        public Array41<Vector4<float>> RenderScale;
+        // Render scale max count: 1 + 64 + 8. First scale is fragment output scale, others are textures/image inputs.
+        public Array73<Vector4<float>> RenderScale;
     }
 }

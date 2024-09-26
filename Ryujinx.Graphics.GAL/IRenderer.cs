@@ -16,11 +16,9 @@ namespace Ryujinx.Graphics.GAL
 
         void BackgroundContextAction(Action action, bool alwaysBackground = false);
 
-        IShader CompileShader(ShaderStage stage, string code);
-
         BufferHandle CreateBuffer(int size);
 
-        IProgram CreateProgram(IShader[] shaders, ShaderInfo info);
+        IProgram CreateProgram(ShaderSource[] shaders, ShaderInfo info);
 
         ISampler CreateSampler(SamplerCreateInfo info);
         ITexture CreateTexture(TextureCreateInfo info, float scale);
@@ -32,6 +30,7 @@ namespace Ryujinx.Graphics.GAL
         ReadOnlySpan<byte> GetBufferData(BufferHandle buffer, int offset, int size);
 
         Capabilities GetCapabilities();
+        HardwareInfo GetHardwareInfo();
 
         IProgram LoadProgramBinary(byte[] programBinary, bool hasFragmentShader, ShaderInfo info);
 

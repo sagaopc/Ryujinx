@@ -93,23 +93,43 @@ namespace Ryujinx.Ui
         public override void InitializeRenderer()
         {
             // First take exclusivity on the OpenGL context.
-            ((Renderer)Renderer).InitializeBackgroundContext(SPBOpenGLContext.CreateBackgroundContext(_openGLContext));
+            ((OpenGLRenderer)Renderer).InitializeBackgroundContext(SPBOpenGLContext.CreateBackgroundContext(_openGLContext));
 
             _openGLContext.MakeCurrent(_nativeWindow);
 
             GL.ClearColor(0, 0, 0, 1.0f);
             GL.Clear(ClearBufferMask.ColorBufferBit);
-            SwapBuffers();
+            SwapBuffers(0);
         }
 
-        public override void SwapBuffers()
+        public override void SwapBuffers(object image)
         {
+            if((int)image != 0)
+            {
+                // The game's framebruffer is already bound, so blit it to the window's backbuffer
+                GL.BindFramebuffer(FramebufferTarget.DrawFramebuffer, 0);
+
+                GL.Clear(ClearBufferMask.ColorBufferBit);
+                GL.ClearColor(0, 0, 0, 1);
+
+                GL.BlitFramebuffer(0,
+                    0,
+                    WindowWidth,
+                    WindowHeight,
+                    0,
+                    0,
+                    WindowWidth,
+                    WindowHeight,
+                    ClearBufferMask.ColorBufferBit,
+                    BlitFramebufferFilter.Linear);
+            }
+
             _nativeWindow.SwapBuffers();
         }
 
-        public override string GetGpuVendorName()
+        protected override string GetGpuBackendName()
         {
-            return ((Renderer)Renderer).GpuVendor;
+            return "OpenGL";
         }
 
         protected override void Dispose(bool disposing)

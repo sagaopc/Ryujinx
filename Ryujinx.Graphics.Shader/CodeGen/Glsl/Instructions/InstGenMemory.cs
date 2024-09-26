@@ -85,13 +85,13 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Glsl.Instructions
 
             string ApplyScaling(string vector)
             {
-                if ((context.Config.Stage.SupportsRenderScale()) &&
+                if (context.Config.Stage.SupportsRenderScale() &&
                     texOp.Inst == Instruction.ImageLoad &&
                     !isBindless &&
                     !isIndexed)
                 {
                     // Image scales start after texture ones.
-                    int scaleIndex = context.Config.GetTextureDescriptors().Length + context.FindImageDescriptorIndex(texOp);
+                    int scaleIndex = context.Config.GetTextureDescriptors().Length + context.Config.FindImageDescriptorIndex(texOp);
 
                     if (pCount == 3 && isArray)
                     {
@@ -621,11 +621,11 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Glsl.Instructions
             {
                 if (intCoords)
                 {
-                    if ((context.Config.Stage.SupportsRenderScale()) &&
+                    if (context.Config.Stage.SupportsRenderScale() &&
                         !isBindless &&
                         !isIndexed)
                     {
-                        int index = context.FindTextureDescriptorIndex(texOp);
+                        int index = context.Config.FindTextureDescriptorIndex(texOp);
 
                         if (pCount == 3 && isArray)
                         {
@@ -756,27 +756,35 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Glsl.Instructions
 
             string samplerName = OperandManager.GetSamplerName(context.Config.Stage, texOp, indexExpr);
 
-            int lodSrcIndex = isBindless || isIndexed ? 1 : 0;
-
-            IAstNode lod = operation.GetSource(lodSrcIndex);
-
-            string lodExpr = GetSoureExpr(context, lod, GetSrcVarType(operation.Inst, lodSrcIndex));
-
             if (texOp.Index == 3)
             {
                 return $"textureQueryLevels({samplerName})";
             }
             else
             {
-                string texCall = $"textureSize({samplerName}, {lodExpr}){GetMask(texOp.Index)}";
+                (TextureDescriptor descriptor, int descriptorIndex) = context.Config.FindTextureDescriptor(texOp);
+                bool hasLod = !descriptor.Type.HasFlag(SamplerType.Multisample) && descriptor.Type != SamplerType.TextureBuffer;
+                string texCall;
+
+                if (hasLod)
+                {
+                    int lodSrcIndex = isBindless || isIndexed ? 1 : 0;
+                    IAstNode lod = operation.GetSource(lodSrcIndex);
+                    string lodExpr = GetSoureExpr(context, lod, GetSrcVarType(operation.Inst, lodSrcIndex));
+
+                    texCall = $"textureSize({samplerName}, {lodExpr}){GetMask(texOp.Index)}";
+                }
+                else
+                {
+                    texCall = $"textureSize({samplerName}){GetMask(texOp.Index)}";
+                }
 
                 if (context.Config.Stage.SupportsRenderScale() &&
+                    (texOp.Index < 2 || (texOp.Type & SamplerType.Mask) == SamplerType.Texture3D) &&
                     !isBindless &&
                     !isIndexed)
                 {
-                    int index = context.FindTextureDescriptorIndex(texOp);
-
-                    texCall = "Helper_TextureSizeUnscale(" + texCall + ", " + index + ")";
+                    texCall = $"Helper_TextureSizeUnscale({texCall}, {descriptorIndex})";
                 }
 
                 return texCall;

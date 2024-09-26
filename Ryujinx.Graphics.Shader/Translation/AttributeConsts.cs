@@ -9,6 +9,7 @@ namespace Ryujinx.Graphics.Shader.Translation
         public const int TessLevelInner0     = 0x010;
         public const int TessLevelInner1     = 0x014;
         public const int Layer               = 0x064;
+        public const int ViewportIndex       = 0x068;
         public const int PointSize           = 0x06c;
         public const int PositionX           = 0x070;
         public const int PositionY           = 0x074;
@@ -66,6 +67,9 @@ namespace Ryujinx.Graphics.Shader.Translation
 
         public const int FragmentOutputIsBgraBase = 0x1000100;
         public const int FragmentOutputIsBgraEnd  = FragmentOutputIsBgraBase + 8 * 4;
+
+        public const int SupportBlockViewInverseX = 0x1000200;
+        public const int SupportBlockViewInverseY = 0x1000204;
 
         public const int ThreadIdX = 0x2000000;
         public const int ThreadIdY = 0x2000004;

@@ -1,20 +1,3 @@
-//
-// Copyright (c) 2019-2021 Ryujinx
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-
 using Ryujinx.Audio.Renderer.Common;
 using Ryujinx.Audio.Renderer.Dsp.Command;
 using Ryujinx.Audio.Renderer.Dsp.State;
@@ -336,11 +319,12 @@ namespace Ryujinx.Audio.Renderer.Server
         /// <param name="workBuffer">The work buffer to use for processing.</param>
         /// <param name="nodeId">The node id associated to this command.</param>
         /// <param name="isLongSizePreDelaySupported">If set to true, the long size pre-delay is supported.</param>
-        public void GenerateReverbEffect(uint bufferOffset, ReverbParameter parameter, Memory<ReverbState> state, bool isEnabled, CpuAddress workBuffer, int nodeId, bool isLongSizePreDelaySupported)
+        /// <param name="newEffectChannelMappingSupported">If set to true, the new effect channel mapping for 5.1 is supported.</param>
+        public void GenerateReverbEffect(uint bufferOffset, ReverbParameter parameter, Memory<ReverbState> state, bool isEnabled, CpuAddress workBuffer, int nodeId, bool isLongSizePreDelaySupported, bool newEffectChannelMappingSupported)
         {
             if (parameter.IsChannelCountValid())
             {
-                ReverbCommand command = new ReverbCommand(bufferOffset, parameter, state, isEnabled, workBuffer, nodeId, isLongSizePreDelaySupported);
+                ReverbCommand command = new ReverbCommand(bufferOffset, parameter, state, isEnabled, workBuffer, nodeId, isLongSizePreDelaySupported, newEffectChannelMappingSupported);
 
                 command.EstimatedProcessingTime = _commandProcessingTimeEstimator.Estimate(command);
 
@@ -357,11 +341,12 @@ namespace Ryujinx.Audio.Renderer.Server
         /// <param name="isEnabled">Set to true if the effect should be active.</param>
         /// <param name="workBuffer">The work buffer to use for processing.</param>
         /// <param name="nodeId">The node id associated to this command.</param>
-        public void GenerateReverb3dEffect(uint bufferOffset, Reverb3dParameter parameter, Memory<Reverb3dState> state, bool isEnabled, CpuAddress workBuffer, int nodeId)
+        /// <param name="newEffectChannelMappingSupported">If set to true, the new effect channel mapping for 5.1 is supported.</param>
+        public void GenerateReverb3dEffect(uint bufferOffset, Reverb3dParameter parameter, Memory<Reverb3dState> state, bool isEnabled, CpuAddress workBuffer, int nodeId, bool newEffectChannelMappingSupported)
         {
             if (parameter.IsChannelCountValid())
             {
-                Reverb3dCommand command = new Reverb3dCommand(bufferOffset, parameter, state, isEnabled, workBuffer, nodeId);
+                Reverb3dCommand command = new Reverb3dCommand(bufferOffset, parameter, state, isEnabled, workBuffer, nodeId, newEffectChannelMappingSupported);
 
                 command.EstimatedProcessingTime = _commandProcessingTimeEstimator.Estimate(command);
 
@@ -379,11 +364,12 @@ namespace Ryujinx.Audio.Renderer.Server
         /// <param name="isEnabled">Set to true if the effect should be active.</param>
         /// <param name="workBuffer">The work buffer to use for processing.</param>
         /// <param name="nodeId">The node id associated to this command.</param>
-        public void GenerateDelayEffect(uint bufferOffset, DelayParameter parameter, Memory<DelayState> state, bool isEnabled, CpuAddress workBuffer, int nodeId)
+        /// <param name="newEffectChannelMappingSupported">If set to true, the new effect channel mapping for 5.1 is supported.</param>
+        public void GenerateDelayEffect(uint bufferOffset, DelayParameter parameter, Memory<DelayState> state, bool isEnabled, CpuAddress workBuffer, int nodeId, bool newEffectChannelMappingSupported)
         {
             if (parameter.IsChannelCountValid())
             {
-                DelayCommand command = new DelayCommand(bufferOffset, parameter, state, isEnabled, workBuffer, nodeId);
+                DelayCommand command = new DelayCommand(bufferOffset, parameter, state, isEnabled, workBuffer, nodeId, newEffectChannelMappingSupported);
 
                 command.EstimatedProcessingTime = _commandProcessingTimeEstimator.Estimate(command);
 
